@@ -4,6 +4,10 @@ A project to create and organize custom race routes on the existing Seacrest Cou
 
 The beta is a Windows app where players can design a course on a map, keep a library of saved races, install a selected route, and restore the original game archive.
 
+In app Screenshot:
+<img width="1304" height="892" alt="image" src="https://github.com/user-attachments/assets/441a847b-2c35-4b88-b64f-228bc5e37e3b" />
+
+
 ## The idea
 
 Seacrest County already has a varied road network. This project explores new race itineraries through those roads by combining existing starting grids, route markers, and finish locations.
