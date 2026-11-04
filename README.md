@@ -1,6 +1,6 @@
 # Seacrest Route Maker
 
-IMPORTANT: THE EXECUTABLE IS NOT BEING CREATED, IF YOU WANT TO HAVE A WORKING COPY MESSAGE ME ON DISCORD AND I CAN SHARE MY WHOLE PROJECT FILE THAT'S LIKE 7 GBS LOL. (DC: shbaum)
+**Beta 2 fixes the missing executable in the GitHub source ZIP. Extract the folder and run `Setup.cmd` before opening the included editor.**
 
 A project to create and organize custom race routes on the existing Seacrest County roads in **Need for Speed Hot Pursuit Remastered**.
 
@@ -47,6 +47,6 @@ The current approach replaces the route of an existing event, retaining its even
 
 ## Credits
 
-Game archive packing uses DGIorio’s [bundle_packer_unpacker](https://github.com/DGIorio/bundle_packer_unpacker), distributed with its MIT license.
+Game archive packing uses DGIorioâ€™s [bundle_packer_unpacker](https://github.com/DGIorio/bundle_packer_unpacker), distributed with its MIT license.
 
 This is an independent community project and is not affiliated with or endorsed by Electronic Arts or Criterion Games.
