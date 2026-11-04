@@ -1,5 +1,7 @@
 # Seacrest Route Maker
 
+IMPORTANT: THE EXECUTABLE IS NOT BEING CREATED, IF YOU WANT TO HAVE A WORKING COPY MESSAGE ME ON DISCORD AND I CAN SHARE MY WHOLE PROJECT FILE THAT'S LIKE 7 GBS LOL.
+
 A project to create and organize custom race routes on the existing Seacrest County roads in **Need for Speed Hot Pursuit Remastered**.
 
 The beta is a Windows app where players can design a course on a map, keep a library of saved races, install a selected route, and restore the original game archive.
