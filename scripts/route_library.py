@@ -10,6 +10,18 @@ from route_map import catalog
 from route_maker import PRESET, canonical_recipe, recipe_hash, validate_recipe, OFFLINE_SUCCESS, ONLINE_SUCCESS
 
 
+def deletion_marker(root, key):
+    return root / 'working/route-library/removed' / key
+
+
+def delete_recipe(raw, root=ROOT):
+    key = recipe_hash(canonical_recipe(raw))
+    marker = deletion_marker(root, key)
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    marker.touch()
+    return dict(recipe_hash=key)
+
+
 def save_recipe(raw, root=ROOT):
     recipe, _ = validate_recipe(raw)
     folder = root / 'working/route-library'
@@ -20,6 +32,7 @@ def save_recipe(raw, root=ROOT):
     import json
     with path.open('x', encoding='utf-8') as f:
         json.dump(recipe, f, ensure_ascii=False, indent=2)
+    deletion_marker(root, recipe_hash(recipe)).unlink(missing_ok=True)
     return dict(path=str(path), recipe_hash=recipe_hash(recipe), name=recipe['name'])
 
 
@@ -144,5 +157,5 @@ def index(root=ROOT):
         entry['marker_count'] = len(entry['recipe']['locations'])
         entry['estimated_length'] = entry['preview']['sample_length']
         entry.pop('priority')
-    return dict(entries=sorted(entries.values(), key=lambda e: (e['name'].casefold(), e['id'])),
+    return dict(entries=sorted((e for e in entries.values() if not deletion_marker(root,e['id']).exists()), key=lambda e: (e['name'].casefold(), e['id'])),
                 issues=issues, length_units='world units (estimate)', game_writes=False)

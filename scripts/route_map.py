@@ -112,6 +112,14 @@ def load_markers():
             markers.append(dict(key=f"{route['event_id']}:{index}",event_id=route['event_id'],index=index,
                                 title=route['title'],role=role,marker_id=values[0],road_id=values[-1],
                                 xyz=triggers[values[0]][0]['xyz'],values=values))
+            if role == 'start':
+                slots = [triggers[v][0] for v in values[1:9]]
+                dx, _, dz = struct.unpack_from('<3f', bytes.fromhex(slots[0]['record_hex']), 20)
+                # Accept the recorded vector only when it agrees with back-to-front grid order.
+                ax, az = (sum(p['xyz'][i] for p in slots[:2]) - sum(p['xyz'][i] for p in slots[-2:]) for i in (0, 2))
+                length = math.hypot(dx, dz)
+                if .85 < length < 1.05 and ax*dx + az*dz > .8 * math.hypot(ax, az) * length:
+                    markers[-1]['grid_heading'] = [dx/length, dz/length]
     return markers,restriction_sources
 
 

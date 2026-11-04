@@ -1,4 +1,4 @@
-# Seacrest Route Maker v0.3
+# Seacrest Route Maker v0.3 beta 2
 
 ## Install, switch, or restore
 
@@ -56,15 +56,11 @@ No packages, game changes or background services are installed.
    are not fully decoded. V0.1 offers stock sets containing exactly two records.
 5. **Preview** validates marker roles, references, distinct IDs and undirected
    connectivity. Wheel zooms; right-drag pans; **Fit map** restores the full view.
-6. **Export offline** creates a new folder under `working/route-maker-builds` with
-   recipe, map estimate, candidate, manifest, re-extraction checks and Route-Test.zip.
-   The export appears in **Game installation**. Select **Install selected build** when ready to test. For a separately shared package, its README describes the portable test tool.
-7. After completing this exact offline course, **Export online after offline
-   success** records your observations and builds the matching online event.
-   To resume later, use **Saved races > Edit a copy** on that course. The library
-   selects a valid matching offline export, preferring one with completion evidence.
-   The already-tested 6 km preset unlocks online export by reproducing the exact
-   successful offline archive; a new recipe does not inherit that success.
+6. Select **Save to library**. In **Saved races**, select **Offline** and click **Install race**. The app builds the selected recipe as needed, inspects the game folder and asks before installing.
+7. After completing the offline race, select **Online** and click **Install race**. Record your offline result when prompted. For multiplayer use the matching online build on both PCs.
+8. **Delete** removes a course from the library. Builds, backups and saved recipe files are retained. Import or save the recipe again to restore the entry.
+
+Green map arrows indicate estimated spawn facing where the recorded start vector agrees with front/back grid positions. Compare the arrow with the first route leg. It does not rotate the cars. Courses with 5–12 waypoints require their own gameplay checks.
 
 All exports replace ROADSTERS REBORN under its existing name and event identity:
 career for offline exports, online Race for multiplayer exports. Use matching

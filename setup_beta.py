@@ -53,7 +53,12 @@ def setup(game):
     app = ROOT/'route-maker'
     (app/'map.json').write_text(json.dumps(catalog()),encoding='utf-8')
     (app/'config.json').write_text(json.dumps(dict(project=str(ROOT),python=sys.executable)),encoding='utf-8')
-    print('Ready. Open route-maker/SeacrestRouteMaker.exe')
+    exe = app/'SeacrestRouteMaker.exe'
+    if not exe.is_file():
+        subprocess.run([sys.executable,str(ROOT/'scripts/build_route_maker_app.py')],check=True)
+    if not exe.is_file():
+        raise ValueError('Editor executable missing after setup.')
+    print('Ready. Open '+str(exe))
 
 
 if __name__ == '__main__':

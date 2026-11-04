@@ -21,7 +21,7 @@ It changes race routes within existing events. Creating new terrain, road geomet
 The prototype currently supports:
 
 - A map-based road and marker picker.
-- Courses with a start, up to four intermediate markers, and a finish.
+- Courses with a start, up to twelve intermediate markers, and a finish.
 - A saved-race library with course names, route previews, estimated lengths, and separate offline/online export information.
 - Versioned recipe saving and importing, with earlier course revisions retained.
 - Offline and online test-package generation, with online export tied to a completed offline test.
@@ -29,15 +29,15 @@ The prototype currently supports:
 
 Custom routes have been completed offline and in two-PC private multiplayer tests without reported issues. These results apply to the tested routes and game setup; each new course still needs its own validation.
 
-## Windows beta v0.3.0-beta.1
+## Windows beta v0.3.0-beta.2
 
-Download **SeacrestRouteMaker-v0.3.0-beta.1-Windows.zip** from [GitHub Releases](https://github.com/yeedough/seacrest-route-maker/releases). Extract it into a new writable folder outside the game. With Windows, Python 3.10+ and the supported stock PC game installed, open a terminal in the extracted folder and run:
+Download **SeacrestRouteMaker-v0.3.0-beta.2-Windows.zip** from [GitHub Releases](https://github.com/yeedough/seacrest-route-maker/releases). Extract it into a new writable folder outside the game. With Windows, Python 3.10+ and the supported stock PC game installed, double-click **Setup.cmd**, or open a terminal in the extracted folder and run:
 
 ```powershell
 py -3 setup_beta.py
 ```
 
-Paste the folder containing NFS11Remastered.exe. Setup reads your game files to generate the map locally. Then launch **route-maker/SeacrestRouteMaker.exe**. Build a route offline first. Under **Game installation**, inspect the game folder, install a selected build, switch between supported routes, or restore the original. Keep your beta folder and its local backups. The classic desktop .NET Framework compiler is needed to export portable packages. To build the editor from source after setup, run `py -3 scripts/build_route_maker_app.py`.
+Paste the folder containing NFS11Remastered.exe. Setup reads your game files to generate the map locally. Then launch **route-maker/SeacrestRouteMaker.exe**. Save the course to the library, select **Offline**, and click **Install race**. After completing it, select **Online** to prepare and install the private multiplayer variant. **Delete** removes the library entry while retaining builds and backups. Importing its recipe brings it back. Green arrows estimate the grid facing direction from stored spawn vectors checked against grid order. Check the arrow against your first leg. Courses with more than four waypoints are experimental and still need gameplay testing. Under **Game installation**, inspect the game folder, install a selected build, switch between supported routes, or restore the original. Keep your beta folder and its local backups. The classic desktop .NET Framework compiler is needed to export portable packages. To build the editor from source after setup, run `py -3 scripts/build_route_maker_app.py`.
 
 ## Current limits
 

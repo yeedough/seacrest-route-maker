@@ -108,7 +108,7 @@ internal sealed class RouteDeployment : ArchiveSafety {
 
     static string RecipeIdentity(Dictionary<string,object> recipe) {
         var keys = ((System.Collections.IEnumerable)recipe["locations"]).Cast<object>().Select(Convert.ToString).ToArray();
-        Require(Convert.ToInt32(recipe["version"]) == 1 && keys.Length >= 2 && keys.Length <= 6 &&
+        Require(Convert.ToInt32(recipe["version"]) == 1 && keys.Length >= 2 && keys.Length <= 14 &&
             keys.All(k=>System.Text.RegularExpressions.Regex.IsMatch(k, @"^\d+:\d+$")), "Invalid route recipe.");
         // Same canonical, name-independent identity used by route_maker.recipe_hash().
         string canonical = "{\"locations\":" + Json().Serialize(keys) + ",\"restriction_source\":" +

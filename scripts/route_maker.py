@@ -1,7 +1,7 @@
 """Local route recipes, map previews, and verified offline/online archive exports.
 
 Never installs, restores, launches the game, or writes save data. The v0.1 recipe
-uses 2..6 existing Locations and an existing two-record restriction set.
+uses 2..14 existing Locations and an existing two-record restriction set.
 """
 import argparse
 import base64
@@ -37,7 +37,7 @@ def canonical_recipe(raw):
     name = raw.get('name','').strip()
     require(1 <= len(name) <= 80 and all(ord(c)>=32 for c in name),'Choose a name of 1..80 characters')
     locations = raw.get('locations')
-    require(isinstance(locations,list) and 2 <= len(locations) <= 6,'Choose a start, finish and at most four waypoints')
+    require(isinstance(locations,list) and 2 <= len(locations) <= 14,'Choose a start, finish and at most twelve waypoints')
     require(all(isinstance(x,str) for x in locations),'Marker keys must be strings')
     require(len(locations)==len(set(locations)),'A marker cannot be repeated in v0.1')
     require(type(raw.get('restriction_source')) is int,'Choose a restriction source')
@@ -272,18 +272,18 @@ def record_success(build_dir,observation):
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action',choices=['catalog','preview','build-offline','build-online','record-offline','library','save-library'])
+    parser.add_argument('action',choices=['catalog','preview','build-offline','build-online','record-offline','library','save-library','delete-library'])
     parser.add_argument('--recipe',type=Path)
     parser.add_argument('--offline-build',type=Path)
     parser.add_argument('--observation-file',type=Path)
     parser.add_argument('--output',type=Path)
     args=parser.parse_args()
-    if args.action in ('library','save-library'):
+    if args.action in ('library','save-library','delete-library'):
         import route_library
         if args.action=='library':result=route_library.index()
         else:
             require(args.recipe is not None,'Recipe required')
-            result=route_library.save_recipe(read_json(args.recipe))
+            result=(route_library.delete_recipe if args.action=='delete-library' else route_library.save_recipe)(read_json(args.recipe))
     elif args.action=='catalog':result=catalog()
     elif args.action=='record-offline':
         require(args.offline_build and args.observation_file,'Build and observation file required')
