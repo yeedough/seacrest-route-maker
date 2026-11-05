@@ -1,5 +1,7 @@
 # Seacrest Route Maker
 
+!!! THE APP AS IT IS NOW, WOULD NOT BRICK YOUR GAME, BUT JUST TO STAY IN THE SAFE ZONE, IT'S RECOMMENDED TO SAVE A COPY OF YOUR GAME FILES FIRST. !!!
+
 A project to create and organize custom race routes on the existing Seacrest County roads in **Need for Speed Hot Pursuit Remastered**.
 
 The beta is a Windows app where players can design a course on a map, keep a library of saved races, install a selected route, and restore the original game archive.
@@ -20,10 +22,11 @@ The prototype currently supports:
 
 - A map-based road and marker picker.
 - Courses with a start, up to twelve intermediate markers, and a finish.
-- A saved-race library with course names, route previews, estimated lengths, and separate offline/online export information.
+- A saved-race library with course names, route previews, estimated lengths, and separate offline/online export information. (export tool works a bit weird, will change later on)
 - Versioned recipe saving and importing, with earlier course revisions retained.
 - Offline and online test-package generation, with online export tied to a completed offline test.
 - Integrated installation, direct route switching, and shared restoration, with archive checks and save backups.
+- For now, the custom races only replace the Roadster Reborn event. That's been the safest and most crash proof method tested so far, might change in the future if found a better way.
 
 Custom routes have been completed offline and in two-PC private multiplayer tests without reported issues. These results apply to the tested routes and game setup; each new course still needs its own validation.
 
