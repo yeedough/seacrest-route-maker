@@ -2,6 +2,8 @@
 
 !!! THE APP AS IT IS NOW, WOULD NOT BRICK YOUR GAME, BUT JUST TO STAY IN THE SAFE ZONE, IT'S RECOMMENDED TO SAVE A COPY OF YOUR GAME FILES FIRST. !!!
 
+If all this setup process is too hard for you, you can reach out to me on discord and I can send you a prebuilt app in a zip. discord id: shbaum
+
 A project to create and organize custom race routes on the existing Seacrest County roads in **Need for Speed Hot Pursuit Remastered**.
 
 The beta is a Windows app where players can design a course on a map, keep a library of saved races, install a selected route, and restore the original game archive.
