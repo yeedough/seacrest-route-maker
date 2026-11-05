@@ -50,6 +50,6 @@ The current approach replaces the route of an existing event, retaining its even
 
 Game archive packing uses DGIorio's [bundle_packer_unpacker](https://github.com/DGIorio/bundle_packer_unpacker), distributed with its MIT license.
 
-Thanks to Zer0day for helping me test it, having hid first custom made race with me.
+Special thanks to Zeroday for helping me with the tests, having his first custom made race with me. 
 
 This is an independent community project and is not affiliated with or endorsed by Electronic Arts or Criterion Games.
