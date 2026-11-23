@@ -91,6 +91,12 @@ def index(root=ROOT):
     for folder in sorted((root / 'working/route-maker-builds').glob('*')):
         if not folder.is_dir():
             continue
+        # Installation snapshots combine many recipes; they are not standalone library variants.
+        try:
+            if read_json(folder / 'manifest.json').get('version') == 2:
+                continue
+        except (OSError, ValueError):
+            pass
         try:
             entry = add(read_json(folder / 'recipe.json'), folder / 'recipe.json')
         except (ValueError, KeyError, TypeError, OSError) as exc:
@@ -102,7 +108,7 @@ def index(root=ROOT):
         try:
             manifest = read_json(folder / 'manifest.json')
             mode = manifest['mode']
-            if mode not in ('offline', 'online') or manifest['recipe_hash'] != entry['id']:
+            if mode not in ('offline', 'online', 'online-arms-race') or manifest['recipe_hash'] != entry['id']:
                 raise ValueError('Manifest does not match the recipe/mode')
             variant.update(mode=mode, candidate_sha256=manifest['candidate_sha256'])
             candidate = folder / 'candidate/GAMELOGIC/CHALLENGEINSTANCES.BNDL'
@@ -147,12 +153,12 @@ def index(root=ROOT):
         if candidates:
             entry['offline_build'] = max(candidates, key=lambda v: (v['tested'], v['path']))['path']
         summaries = []
-        for mode in ('offline', 'online'):
+        for mode in ('offline', 'online', 'online-arms-race'):
             variants = [v for v in entry['variants'] if v['mode'] == mode]
             label = ('reported complete' if any(v['valid'] and v['tested'] for v in variants) else
                      'built' if any(v['valid'] for v in variants) else
                      'unavailable' if variants else 'not built')
-            summaries.append(mode.capitalize() + ': ' + label)
+            summaries.append(('Online Arms Race' if mode=='online-arms-race' else mode.capitalize()) + ': ' + label)
         entry['status'] = ' | '.join(summaries)
         entry['marker_count'] = len(entry['recipe']['locations'])
         entry['estimated_length'] = entry['preview']['sample_length']

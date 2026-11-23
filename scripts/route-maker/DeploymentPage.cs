@@ -18,6 +18,108 @@ partial class MakerForm {
     Button inspectGame, installRoute, restoreGame;
     RouteDeployment.Inspection installed;
     string lastDeploymentLog;
+    readonly ComboBox stockTargets=new ComboBox(),eventKind=new ComboBox();
+    static string ModeTitle(string mode){return mode=="offline"?"Offline Race":mode=="online-arms-race"?"Online Arms Race":"Online Race";}
+    void SyncEventKind(){if(installMode.SelectedIndex!=1)eventKind.SelectedIndex=0;eventKind.Enabled=installMode.SelectedIndex==1;FillTargets();}
+    readonly List<StockTarget> targets=new List<StockTarget>();
+    protected virtual bool ConfirmRouteChange(string message,string caption) {
+        return MessageBox.Show(this,message,caption,MessageBoxButtons.OKCancel)==DialogResult.OK;
+    }
+    sealed class StockTarget {
+        public int Id;public string Name,Mode;
+        public override string ToString(){return Name+" ("+ModeTitle(Mode)+") ["+Id+"]";}
+    }
+    void FillTargets() {
+        var previous=stockTargets.SelectedItem as StockTarget;
+        string mode=installMode.SelectedIndex==1?(eventKind.SelectedIndex==1?"online-arms-race":"online"):"offline";
+        var available=targets.Where(t=>t.Mode==mode).ToArray();
+        stockTargets.Items.Clear();stockTargets.Items.AddRange(available);
+        stockTargets.SelectedItem=available.FirstOrDefault(t=>previous!=null&&t.Id==previous.Id)??
+            available.FirstOrDefault(t=>t.Id==(mode=="offline"?321312:mode=="online-arms-race"?1104032:744283))??available.FirstOrDefault();
+    }
+    void SetPreparedChoice(Dictionary<string,object> result,bool navigate=true) {
+        string folder=(string)result["build_dir"];
+        latestBuild=folder;
+        var choice=new InstallChoice{Name="Prepared replacements",Mode="offline / online",Folder=folder,Hash=(string)result["candidate_sha256"]};
+        installChoices.Items.Clear();installChoices.Items.Add(choice);installChoices.SelectedItem=choice;
+        if(navigate)pages.SelectedTab=gamePage;UpdateDeploymentButtons();
+    }
+
+    sealed class ReplacementRow {
+        public Dictionary<string,object> Data;
+        public override string ToString(){return (string)Json.Obj(Data["recipe"])["name"]+" => "+Data["stock_title"]+
+            " ("+ModeTitle((string)Data["mode"])+") ["+Data["target_event_id"]+"]";}
+    }
+    readonly TabPage replacementsPage=new TabPage("Replaced routes");
+    readonly ListBox replacementList=new ListBox();
+    readonly MapCanvas replacementMap=new MapCanvas();
+    readonly Label replacementInfo=new Label(),replacementDetails=new Label();
+    Button restoreReplacement;
+    string replacementObserved;
+
+    void BuildReplacementsPage() {
+        var layout=new TableLayoutPanel{Dock=DockStyle.Fill,ColumnCount=2,RowCount=1,Padding=new Padding(8)};
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,42));layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,58));
+        var left=new TableLayoutPanel{Dock=DockStyle.Fill,ColumnCount=1,RowCount=3,Padding=new Padding(0,0,10,0)};
+        left.RowStyles.Add(new RowStyle(SizeType.Absolute,76));left.RowStyles.Add(new RowStyle(SizeType.Percent,100));left.RowStyles.Add(new RowStyle(SizeType.Absolute,42));
+        replacementInfo.Dock=DockStyle.Fill;replacementInfo.Text="Choose the game folder in Game installation. This list shows its installed replacements.";
+        replacementList.Name="ReplacementList";replacementList.Dock=DockStyle.Fill;replacementList.HorizontalScrollbar=true;replacementList.IntegralHeight=false;
+        replacementList.SelectedIndexChanged+=delegate{ShowReplacementPreview();UpdateDeploymentButtons();};
+        var actions=new FlowLayoutPanel{Dock=DockStyle.Fill};
+        actions.Controls.Add(Button("Refresh",async delegate{await RefreshReplacements();}));
+        restoreReplacement=Button("Restore selected to stock",async delegate{await RestoreReplacement();});restoreReplacement.Name="RestoreReplacement";actions.Controls.Add(restoreReplacement);
+        left.Controls.Add(replacementInfo,0,0);left.Controls.Add(replacementList,0,1);left.Controls.Add(actions,0,2);
+        var right=new TableLayoutPanel{Dock=DockStyle.Fill,ColumnCount=1,RowCount=2};
+        right.RowStyles.Add(new RowStyle(SizeType.Percent,100));right.RowStyles.Add(new RowStyle(SizeType.Absolute,116));
+        replacementMap.Dock=DockStyle.Fill;replacementDetails.Dock=DockStyle.Fill;replacementDetails.Padding=new Padding(0,8,0,0);
+        right.Controls.Add(replacementMap,0,0);right.Controls.Add(replacementDetails,0,1);
+        layout.Controls.Add(left,0,0);layout.Controls.Add(right,1,0);replacementsPage.Controls.Add(layout);pages.TabPages.Add(replacementsPage);
+    }
+    void ShowReplacementPreview() {
+        replacementMap.Route.Clear();replacementMap.Guide.Clear();
+        var row=replacementList.SelectedItem as ReplacementRow;
+        if(row==null){replacementDetails.Text="Select an installed replacement to preview its custom course.";replacementMap.Invalidate();return;}
+        var recipe=Json.Obj(row.Data["recipe"]);var preview=Json.Obj(row.Data["preview"]);
+        replacementMap.Route=Json.Arr(recipe["locations"]).Select(k=>markers.Single(m=>m.Key==Json.Str(k))).ToList();
+        replacementMap.Guide=Json.Arr(preview["estimated_lines"]).Select(Lines).ToList();replacementMap.FitMap();
+        replacementDetails.Text=row+"\n"+replacementMap.Route.Count+" markers   |   Estimated length: "+Json.Num(preview["sample_length"]).ToString("N0")+" world units\n"+
+            "Amber preview estimates the custom course; it ignores direction, restrictions and junction gaps.\nRestoring this route keeps your other replacements and current saves.";
+    }
+    async Task RefreshReplacements() {
+        if(busy)return;
+        var selected=replacementList.SelectedItem as ReplacementRow;
+        int selectedId=selected==null?0:Convert.ToInt32(selected.Data["target_event_id"]);
+        try {
+            Busy(true);status.Text="Reading installed replacements…";
+            string game=gamePath.Text;var service=new RouteDeployment(project);
+            var current=await Task.Run(()=>service.Inspect(game));
+            installed=current;installedLabel.Text=current.ToString();
+            var result=await Run("installed-replacements","--installed-hash "+current.Hash);
+            replacementList.Items.Clear();foreach(var v in Json.Arr(result["replacements"]))replacementList.Items.Add(new ReplacementRow{Data=Json.Obj(v)});
+            replacementObserved=current.Hash;
+            replacementList.SelectedItem=replacementList.Items.Cast<ReplacementRow>().FirstOrDefault(r=>Convert.ToInt32(r.Data["target_event_id"])==selectedId)??replacementList.Items.Cast<ReplacementRow>().FirstOrDefault();
+            replacementInfo.Text=(replacementList.Items.Count==0?"All supported routes are stock.":replacementList.Items.Count+" installed replacement(s). Select a custom course to see its route.")+"\nGame folder: "+game;
+            ShowReplacementPreview();status.Text="Installed replacements refreshed.";
+        } catch(Exception ex){replacementObserved=null;replacementList.Items.Clear();ShowReplacementPreview();replacementInfo.Text=ex.Message;status.Text="Could not read replacements.";}
+        finally{Busy(false);}
+    }
+    async Task RestoreReplacement() {
+        var row=replacementList.SelectedItem as ReplacementRow;if(busy||row==null)return;
+        if(!ConfirmRouteChange("Restore only "+row+" to stock?","Restore route"))return;
+        try {
+            Busy(true);
+            var current=new RouteDeployment(project).Inspect(gamePath.Text);
+            if(current.Hash!=replacementObserved || current.GameRunning)throw new InvalidOperationException("Installation changed or game started. Close the game and refresh.");
+            installed=current;
+            var result=await Run("prepare-replacements","--installed-hash "+replacementObserved+" --remove-target "+row.Data["target_event_id"]);
+            bool stock=(string)result["candidate_sha256"]==RouteDeployment.Stock;
+            if(!stock)SetPreparedChoice(result,false);
+            Busy(false);await ChangeInstallation(!stock);
+            if(installed==null || installed.Hash!=(string)result["candidate_sha256"])throw new InvalidOperationException(operationResult.Text);
+        } catch(Exception ex){MessageBox.Show(this,ex.Message,"Restore stopped");}
+        finally{Busy(false);}
+        await RefreshReplacements();
+    }
 
     sealed class InstallChoice {
         public string Name, Mode, Folder, Hash;
@@ -52,7 +154,7 @@ partial class MakerForm {
         var actions=new FlowLayoutPanel{Dock=DockStyle.Fill};
         inspectGame=Button("Inspect",async delegate{await InspectInstallation();});
         installRoute=Button("Install selected build",async delegate{await ChangeInstallation(true);});
-        restoreGame=Button("Restore original",async delegate{await ChangeInstallation(false);});
+        restoreGame=Button("Restore all to stock",async delegate{await ChangeInstallation(false);});
         actions.Controls.Add(inspectGame);actions.Controls.Add(installRoute);actions.Controls.Add(restoreGame);
         panel.Controls.Add(actions,1,5);panel.SetColumnSpan(actions,2);
         var help=Label("Install backs up current saves and retains the previous archive. Restore keeps your current progress.");
@@ -64,7 +166,7 @@ partial class MakerForm {
         });
         panel.Controls.Add(logButton,1,8);
         gamePage.Controls.Add(panel);pages.TabPages.Add(gamePage);
-        gamePath.TextChanged+=delegate{installed=null;installedLabel.Text="Inspect this game folder before making changes.";UpdateDeploymentButtons();};
+        gamePath.TextChanged+=delegate{replacementObserved=null;replacementList.Items.Clear();ShowReplacementPreview();installed=null;installedLabel.Text="Inspect this game folder before making changes.";UpdateDeploymentButtons();};
         installChoices.SelectedIndexChanged+=delegate{UpdateDeploymentButtons();};
         UpdateDeploymentButtons();
     }
@@ -110,6 +212,7 @@ partial class MakerForm {
         var selected=installChoices.SelectedItem as InstallChoice;
         installRoute.Enabled=ready && selected!=null && installed.Hash!=selected.Hash;
         restoreGame.Enabled=ready && installed.Hash!=RouteDeployment.Stock;
+        if(restoreReplacement!=null)restoreReplacement.Enabled=ready && replacementList.SelectedItem!=null && replacementObserved==installed.Hash;
     }
 
     async Task InspectInstallation() {
@@ -137,7 +240,18 @@ partial class MakerForm {
         lastDeploymentLog=service.LogPath(id);
         bool completed=false;
         try {
-            Busy(true);status.Text=install?"Checking build and backing up current saves…":"Verifying the original archive…";
+            Busy(true);
+            if(install) {
+                var manifest=Json.Read(Path.Combine(source,"manifest.json"));
+                if(!manifest.ContainsKey("version") || Convert.ToInt32(manifest["version"])!=2) {
+                    var old=await Run("installed-replacements","--installed-hash "+wanted);
+                    var rows=Json.Arr(old["replacements"]).ToArray();if(rows.Length!=1)throw new InvalidOperationException("Choose a single saved course to install.");
+                    var row=Json.Obj(rows[0]);string recipeFile=Path.Combine(session,"install-"+(++serial)+".json");Json.Write(recipeFile,row["recipe"]);
+                    var combined=await Run("prepare-replacements","--installed-hash "+before+" --target-id "+row["target_event_id"]+" --recipe "+Quote(recipeFile));
+                    source=(string)combined["build_dir"];wanted=(string)combined["candidate_sha256"];
+                }
+            }
+            status.Text=install?"Checking build and backing up current saves…":"Verifying the original archive…";
             operationResult.Text=status.Text;
             bool elevate=false;
             try { operationResult.Text=await Task.Run(()=>service.Execute(action,folder,saves,source,wanted,before,id)); }

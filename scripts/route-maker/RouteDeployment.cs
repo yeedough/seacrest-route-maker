@@ -116,6 +116,16 @@ internal sealed class RouteDeployment : ArchiveSafety {
         return Hash(Encoding.UTF8.GetBytes(canonical));
     }
 
+    void ValidateTarget(int id,string mode) {
+        string path=Path.Combine(project,"experiments","004-event-catalog","events.json");CheckPath(path);
+        Require(new FileInfo(path).Length<16777216,"Event catalog too large.");
+        var events=Json().Deserialize<Dictionary<string,object>[]>(File.ReadAllText(path));
+        var e=events.SingleOrDefault(v=>Convert.ToInt32(v["serialized_object_id"])==id);
+        Require(e!=null && (mode=="offline" || mode=="online" || mode=="online-arms-race") &&
+            Convert.ToString(e["definition_name"])==(mode=="offline"?"RaceDefinition":mode=="online-arms-race"?"OnlineArmsRaceDefinition":"OnlineRaceDefinition") &&
+            !Convert.ToString(e["title"]).ToUpperInvariant().Contains("TEST"),"Unsupported replacement target/mode.");
+    }
+
     byte[] ValidateBuild(string folder, string wanted, byte[] original, out string label) {
         folder = Path.GetFullPath(folder).TrimEnd('\\');
         CheckPath(folder);
@@ -130,17 +140,29 @@ internal sealed class RouteDeployment : ArchiveSafety {
             label = Legacy[pinned];
             return ReadArchive(Path.Combine(folder,"candidate",RelativeArchive), pinned);
         }
-        Require(String.Equals(Path.GetDirectoryName(folder), Builds, StringComparison.OrdinalIgnoreCase), "Choose a build from Saved races.");
+        Require(String.Equals(Path.GetDirectoryName(folder), Builds, StringComparison.OrdinalIgnoreCase), "Choose a build from Race Library.");
         var manifest = ReadJson(Path.Combine(folder, "manifest.json"), 65536);
         var recipe = ReadJson(Path.Combine(folder, "recipe.json"), 65536);
         string mode = (string)manifest["mode"];
-        Require((mode == "offline" || mode == "online") && (string)manifest["original_sha256"] == Original &&
-            (string)manifest["candidate_sha256"] == wanted && (string)manifest["recipe_hash"] == RecipeIdentity(recipe) &&
-            Convert.ToInt32(manifest["target_event_id"]) == (mode == "offline" ? 321312 : 744283), "Build identity differs from the selected recipe or mode.");
+        Require((string)manifest["original_sha256"] == Original && (string)manifest["candidate_sha256"] == wanted,
+            "Build archive identity differs.");
+        bool combined=Convert.ToInt32(manifest["version"])==2;
+        if(combined) {
+            Require(mode=="replacement-set","Invalid replacement set mode.");
+            var rows=((System.Collections.IEnumerable)manifest["replacements"]).Cast<Dictionary<string,object>>().ToArray();
+            Require(rows.Length>0 && rows.Select(r=>Convert.ToInt32(r["target_event_id"])).Distinct().Count()==rows.Length,"Duplicate or empty replacements.");
+            foreach(var row in rows) {
+                ValidateTarget(Convert.ToInt32(row["target_event_id"]),(string)row["mode"]);
+                Require((string)row["recipe_hash"]==RecipeIdentity((Dictionary<string,object>)row["recipe"]),"Replacement recipe changed.");
+            }
+        } else {
+            ValidateTarget(Convert.ToInt32(manifest["target_event_id"]),mode);
+            Require((string)manifest["recipe_hash"] == RecipeIdentity(recipe),"Build recipe differs.");
+        }
         var bytes = ReadArchive(Path.Combine(folder, "candidate", RelativeArchive), wanted);
         var patch = ReadJson(Path.Combine(folder, "package", "patch.json"), 4194304);
         Require(bytes.SequenceEqual(ReconstructPatch(original, patch, wanted)), "Package and candidate differ.");
-        label = (string)recipe["name"] + " (" + mode + ")";
+        label = combined ? "Custom route replacements" : (string)recipe["name"] + " (" + mode + ")";
         return bytes;
     }
 
@@ -225,6 +247,11 @@ internal sealed class RouteDeployment : ArchiveSafety {
                 if (install || before.Hash != wanted) {
                     original = OriginalBytes(game);
                     output = install ? ValidateBuild(folder,wanted,original,out label) : original;
+                    if(install && IsUnder(folder,Builds)) {
+                        var plan=ReadJson(Path.Combine(folder,"manifest.json"),65536);
+                        if(Convert.ToInt32(plan["version"])==2)
+                            Require((string)plan["installed_before"]==before.Hash,"Replacement set was prepared for a different installed archive. Prepare it again.");
+                    }
                 }
                 if (before.Hash == wanted) return Record(log, "Already installed: " + label + Environment.NewLine + wanted);
                 SaveVerified(Path.Combine(state,"original.bndl"),original,Original);

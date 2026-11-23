@@ -51,7 +51,7 @@ internal sealed class RouteTestManager : ArchiveSafety {
             NoLink(originalBackup);Require(HashFile(originalBackup)==Original,"Original backup hash mismatch; restoration stopped.");output=File.ReadAllBytes(originalBackup);
         }
         string atomic=ReplaceArchive(State,target,install?"Install":"Restore",before,wanted,output,saveRoot,saveHashes,saveBackup);
-        Console.WriteLine(install?"Installed and verified. Select ROADSTERS REBORN in "+(Mode=="offline"?"career, with internet disconnected.":"a private online Race lobby."):"Original archive restored and verified. Current saves retained.");
+        Console.WriteLine(install?"Installed and verified. See README.txt for the replaced stock event in "+(Mode=="offline"?"career, with internet disconnected.":Mode=="online-arms-race"?"a private online Arms Race lobby.":"a private online Race lobby."):"Original archive restored and verified. Current saves retained.");
         Console.WriteLine("SHA256: "+wanted);Console.WriteLine("Archive backup: "+atomic);
     }
     static string Quote(string s){var b=new StringBuilder("\"");int n=0;foreach(char c in s){if(c=='\\'){n++;continue;}b.Append('\\',c=='"'?n*2+1:n);b.Append(c);n=0;}b.Append('\\',n*2);return b.Append('"').ToString();}

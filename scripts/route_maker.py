@@ -97,18 +97,15 @@ def emit_delta(source,candidate):
     return ops
 
 
-def build(raw,mode='offline',offline_build=None):
+def build(raw,mode='offline',offline_build=None,target_id=None,replacements=None,installed_before=None):
     recipe,preview=validate_recipe(raw)
-    require(mode in ('offline','online'),'Unknown mode')
-    if mode=='online':
-        require(offline_build is not None,'Build and test the offline export first')
-        offline_dir=safe_build_dir(offline_build)
-        previous=read_json(offline_dir/'manifest.json')
-        require(previous['mode']=='offline' and previous['recipe_hash']==recipe_hash(recipe),'Offline recipe does not match')
-        require(sha(offline_dir/'candidate/GAMELOGIC/CHALLENGEINSTANCES.BNDL')==previous['candidate_sha256'],'Offline candidate changed')
-        proof=read_json(offline_dir/'offline-success.json')
-        require(proof['candidate_sha256']==previous['candidate_sha256'] and proof['recipe_hash']==recipe_hash(recipe)
-                and proof['result']=='user_reported_completed_without_issues','Matching offline completion record required')
+    # Keep longer recipes readable/editable, but never emit the observed native preview overflow.
+    pending=replacements if replacements is not None else [dict(recipe=recipe)]
+    require(all(len(e['recipe']['locations'])<=8 for e in pending),
+            'The game preview buffer holds 8 total markers (start and finish included). '
+            '9+ markers overwrite its counter. Keep this recipe, edit a copy to 8 or fewer, '
+            'or restore the over-limit replacement. No route was installed.')
+    require(mode in ('offline','online','online-arms-race'),'Unknown mode')
     base=EXTRACTED/'GAMELOGIC/CHALLENGEINSTANCES'
     source=ROOT/'working/initial/GAMELOGIC/CHALLENGEINSTANCES.BNDL'
     tool=ROOT/'tools/bundle_packer_unpacker/bundle_packer_unpacker.py'
@@ -116,13 +113,13 @@ def build(raw,mode='offline',offline_build=None):
     original=(base/RESOURCE).read_bytes()
     events=read_json(ROOT/'experiments/004-event-catalog/events.json')
     before=[event_route(original,e) for e in events]
-    by_event={e['serialized_object_id']:e for e in events}
     by_route={r['event_id']:r for r in before}
-    target_id=321312 if mode=='offline' else 744283
-    target=by_route[target_id]
-    donors=[by_route[m['event_id']]['Location'][m['index']] for m in preview['markers']]
-    restrictions=by_route[recipe['restriction_source']]['RestrictedRoadSections']
-    require(len(target['Location'])==len(target['RestrictedRoadSections'])==len(restrictions)==2,'Target layout changed')
+    from route_sets import targets
+    supported={t['event_id']:t for t in targets()}
+    target_id=target_id or {'offline':321312,'online':744283,'online-arms-race':1104032}[mode]
+    entries=replacements if replacements is not None else [dict(target_event_id=target_id,recipe=recipe)]
+    require(entries and len({e['target_event_id'] for e in entries})==len(entries),'Empty or duplicate replacement targets')
+    entries=sorted(entries,key=lambda e:e['target_event_id'])
     _,_,records=container(source)
     rec_index,=[i for i,r in enumerate(records) if r['identity'].startswith('5f470600')]
     old_start,old_count=records[rec_index]['import_offset'],records[rec_index]['import_count']
@@ -136,41 +133,60 @@ def build(raw,mode='offline',offline_build=None):
     require([(f['type'],f['offset'],f['size']) for f in loc['fields']]==[(7,i*4,4) for i in range(11)],'Location schema changed')
     require([(f['type'],f['offset'],f['size']) for f in res['fields']]==[(7,0,4),(9,4,4),(2,8,1)],'Restriction schema changed')
     edited=bytearray(original[:old_start]);allowed=set();added=[]
-    addresses=[x['object_offset'] for x in target['Location']]
-    if len(donors)>2:
-        array_at=len(edited);edited.extend(bytes(((len(donors)*8+15)//16)*16))
-        for donor in donors[2:]:
-            pos=donor['object_offset'];at=len(edited)
-            require(original[pos:pos+16]==bytes(16) and original[pos+28:pos+48]==bytes(20)
-                    and original[pos+92:pos+96]==bytes(4) and u64(original,pos+16)==pos+48
-                    and u32(original,pos+24)==loc['type_hash'],'Unexpected Location object')
-            clone=bytearray(original[pos:pos+96]);struct.pack_into('<Q',clone,16,at+48);edited.extend(clone)
-            imp=bytearray(imports[pos]);require(u32(imp,0)==loc['resource_id'],'Wrong Location import')
-            struct.pack_into('<I',imp,8,at|0x80000000);added.append(bytes(imp));addresses.append(at)
-        for i,at in enumerate(addresses):struct.pack_into('<Q',edited,array_at+i*8,at)
-        field=target['body_offset']+0xd8
-        struct.pack_into('<QII',edited,field,array_at,len(donors),8);allowed.update(range(field,field+16))
-    for kind,srcs,sc in [('Location',donors[:2],loc),('RestrictedRoadSections',restrictions,res)]:
-        for src,dst in zip(srcs,target[kind]):
-            for field in sc['fields']:
-                a,b,size=src['body_offset']+field['offset'],dst['body_offset']+field['offset'],field['size']
-                edited[b:b+size]=original[a:a+size];allowed.update(range(b,b+size))
+    expected_routes={}; after_events=copy.deepcopy(events)
+    for entry in entries:
+        tid=entry['target_event_id']
+        require(tid in supported,'Unsupported stock race target')
+        selected_recipe,selected_preview=validate_recipe(entry['recipe'])
+        entry.update(recipe=selected_recipe,recipe_hash=recipe_hash(selected_recipe),mode=supported[tid]['mode'],stock_title=supported[tid]['title'])
+        if replacements is None:require(entry['mode']==mode,'Target mode mismatch')
+        target=by_route[tid]
+        donors=[by_route[m['event_id']]['Location'][m['index']] for m in selected_preview['markers']]
+        restrictions=by_route[selected_recipe['restriction_source']]['RestrictedRoadSections']
+        require(len(target['RestrictedRoadSections'])==len(restrictions)==2,'Target restriction layout changed')
+        addresses=[x['object_offset'] for x in target['Location'][:len(donors)]]
+        target_added=[]
+        # Keep the original vector if counts match, preserving proven two-marker outputs.
+        if len(donors)!=len(target['Location']):
+            array_at=len(edited);edited.extend(bytes(((len(donors)*8+15)//16)*16))
+            for donor in donors[len(addresses):]:
+                pos=donor['object_offset'];at=len(edited)
+                require(original[pos:pos+16]==bytes(16) and original[pos+28:pos+48]==bytes(20)
+                        and original[pos+92:pos+96]==bytes(4) and u64(original,pos+16)==pos+48
+                        and u32(original,pos+24)==loc['type_hash'],'Unexpected Location object')
+                clone=bytearray(original[pos:pos+96]);struct.pack_into('<Q',clone,16,at+48);edited.extend(clone)
+                imp=bytearray(imports[pos]);require(u32(imp,0)==loc['resource_id'],'Wrong Location import')
+                struct.pack_into('<I',imp,8,at|0x80000000);target_added.append(bytes(imp));addresses.append(at)
+            for i,at in enumerate(addresses):struct.pack_into('<Q',edited,array_at+i*8,at)
+            field=target['body_offset']+0xd8
+            struct.pack_into('<QII',edited,field,array_at,len(donors),8);allowed.update(range(field,field+16))
+        for kind,srcs,sc in [('Location',donors,loc),('RestrictedRoadSections',restrictions,res)]:
+            for src,dst in zip(srcs,target[kind]):
+                for field in sc['fields']:
+                    a,b,size=src['body_offset']+field['offset'],dst['body_offset']+field['offset'],field['size']
+                    edited[b:b+size]=original[a:a+size];allowed.update(range(b,b+size))
+        after_target=next(e for e in after_events if e['serialized_object_id']==tid)
+        for imp in target_added:
+            identity,typ,index,kind,at,reserved=struct.unpack('<IHBBII',imp)
+            require(reserved==0,'Unexpected import data')
+            after_target['imports'].append(dict(location=at&0x7fffffff,resource_id=identity,type=typ,index=index,kind=kind,schema_name_if_definition='Location'))
+        added.extend(target_added)
+        expected_routes[tid]={'Location':donors,'RestrictedRoadSections':restrictions}
     new_start=len(edited);edited.extend(b''.join(import_bytes+added))
     changed=[i for i in range(old_start) if original[i]!=edited[i]]
     require(changed and set(changed)<=allowed,'No route change, or unexpected non-route edits')
-    after_events=copy.deepcopy(events)
-    after_target=next(e for e in after_events if e['serialized_object_id']==target_id)
-    for imp in added:
-        identity,typ,index,kind,at,reserved=struct.unpack('<IHBBII',imp)
-        require(reserved==0,'Unexpected import data')
-        after_target['imports'].append(dict(location=at&0x7fffffff,resource_id=identity,type=typ,index=index,kind=kind,schema_name_if_definition='Location'))
     after=[event_route(edited,e) for e in after_events]
-    require([a['event_id'] for a,b in zip(before,after) if a!=b]==[target_id],'Other event changed')
-    result=next(r for r in after if r['event_id']==target_id)
-    for kind,expected in [('Location',donors),('RestrictedRoadSections',restrictions)]:
-        require([x['values'] for x in result[kind]]==[x['values'] for x in expected],'Decoded route mismatch')
+    changed_ids=[a['event_id'] for a,b in zip(before,after) if a!=b]
+    require(set(changed_ids)<=set(expected_routes),'Other event changed')
+    for tid,expected in expected_routes.items():
+        result=next(r for r in after if r['event_id']==tid)
+        for kind,values in expected.items():
+            require([x['values'] for x in result[kind]]==[x['values'] for x in values],'Decoded route mismatch')
+    for kind in ('Location','RestrictedRoadSections'):
         all_addresses=[x['object_offset'] for r in after for x in r[kind]]
         require(len(all_addresses)==len(set(all_addresses)),'Aliased nested object')
+    result=[r for r in after if r['event_id'] in expected_routes]
+    if replacements is None:result=result[0]
     slug=re.sub(r'[^a-zA-Z0-9_-]+','-',recipe['name']).strip('-')[:45] or 'route'
     out=safe_build_dir(OUTPUT_ROOT/(datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S-%f')+'-'+slug+'-'+mode),False)
     require(not out.exists(),'Build already exists')
@@ -198,10 +214,12 @@ def build(raw,mode='offline',offline_build=None):
     candidate_hash=sha(packed)
     manifest=dict(version=1,mode=mode,name=recipe['name'],recipe_hash=recipe_hash(recipe),
                   original_sha256=ORIGINAL_HASH,candidate_sha256=candidate_hash,target_event_id=target_id,
-                  displayed_title='ROADSTERS REBORN',locations=len(donors),added_objects=len(added),
-                  payloads_checked=232,events_checked=423,changed_event_ids=[target_id],
+                  displayed_title=supported[target_id]['title'],locations=len(recipe['locations']),added_objects=len(added),
+                  payloads_checked=232,events_checked=423,changed_event_ids=changed_ids,
                   state='built_not_installed_not_gameplay_tested',candidate_file=str(packed),
                   restrictions_source=recipe['restriction_source'],map_preview_is_estimate=True)
+    if replacements is not None:
+        manifest.update(version=2,mode='replacement-set',replacements=entries,installed_before=installed_before,name='Installed route replacements')
     expected_success=OFFLINE_SUCCESS if mode=='offline' else ONLINE_SUCCESS
     if candidate_hash==expected_success:
         manifest['state']='byte_identical_to_user_completed_reference'
@@ -215,6 +233,8 @@ def build(raw,mode='offline',offline_build=None):
     package=out/'package';package.mkdir()
     write_json(package/'patch.json',dict(original_sha256=ORIGINAL_HASH,candidate_sha256=candidate_hash,
                candidate_length=packed.stat().st_size,operations=emit_delta(source.read_bytes(),packed.read_bytes())))
+    if replacements is not None:
+        return dict(build_dir=str(out),candidate_sha256=candidate_hash,replacements=entries,mode='replacement-set')
     helper=(ROOT/'scripts/custom-route/Manage-Test.ps1').read_text(encoding='utf-8-sig')
     require(helper.count(ONLINE_SUCCESS)==1,'Helper template changed')
     helper=helper.replace(ONLINE_SUCCESS,candidate_hash).replace('Grand Ocean Sprint candidate 015','Route maker export').replace('grand-ocean-015-','route-maker-')
@@ -222,7 +242,7 @@ def build(raw,mode='offline',offline_build=None):
     build_manager(package,manifest)
     shutil.copy2(ROOT/'handoff/multiplayer-test/expected-hashes.json',package/'expected-hashes.json')
     instructions=(f"{recipe['name']} — {mode.upper()} route-maker export\n"
-        f"Displayed event: ROADSTERS REBORN ({'career' if mode=='offline' else 'online Race'}).\n"
+        f"Displayed event: {manifest['displayed_title']} ({'career Race' if mode=='offline' else 'online Arms Race' if mode=='online-arms-race' else 'online Race'}).\n"
         f"Candidate SHA-256: {candidate_hash}\nStatus: {manifest['state']}\n\n"
         "This ZIP contains a patch and helper, not full game archives or saves.\n"
         "Extract to a new writable folder outside the game. Keep its state/backups/logs local.\n"
@@ -243,8 +263,7 @@ def build(raw,mode='offline',offline_build=None):
         "Retain backups; never restore old saves automatically. Do not use the Seacrest\n"
         "switcher on this candidate. Unknown versions/modifications are refused.\n\n"
         +("Test career OFFLINE first: preview, start, guidance, full finish/results.\n"
-          "Record actual completion in the maker before creating an online export.\n"
-          "Completing this event may update its saved career result.\n" if mode=='offline' else
+            "Completing this event may update its saved career result.\n" if mode=='offline' else
           "Both PCs need this exact candidate, fresh backups and successful startup.\n"
           "Test only a private lobby. Do not use public matchmaking.\n")
         +"Every new recipe needs gameplay testing; the map path is an estimate.\n"
@@ -258,7 +277,7 @@ def build(raw,mode='offline',offline_build=None):
 
 def record_success(build_dir,observation):
     out=safe_build_dir(build_dir);manifest=read_json(out/'manifest.json');recipe=read_json(out/'recipe.json')
-    require(manifest['mode']=='offline','Only offline reports unlock online export')
+    require(manifest['mode']=='offline','Only offline builds accept an offline report')
     require(len(observation.strip())>=10,'Describe the completed offline test')
     require(sha(out/'candidate/GAMELOGIC/CHALLENGEINSTANCES.BNDL')==manifest['candidate_sha256'],'Candidate changed')
     require(recipe_hash(canonical_recipe(recipe))==manifest['recipe_hash'],'Recipe changed')
@@ -272,13 +291,25 @@ def record_success(build_dir,observation):
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action',choices=['catalog','preview','build-offline','build-online','record-offline','library','save-library','delete-library'])
+    parser.add_argument('action',choices=['catalog','preview','build-offline','build-online','build-arms-race','record-offline','library','save-library','delete-library','targets','installed-replacements','prepare-replacements'])
     parser.add_argument('--recipe',type=Path)
+    parser.add_argument('--target-id',type=int)
+    parser.add_argument('--installed-hash')
+    parser.add_argument('--remove-target',type=int)
     parser.add_argument('--offline-build',type=Path)
     parser.add_argument('--observation-file',type=Path)
     parser.add_argument('--output',type=Path)
     args=parser.parse_args()
-    if args.action in ('library','save-library','delete-library'):
+    if args.action in ('targets','installed-replacements','prepare-replacements'):
+        import route_sets
+        if args.action=='targets':result=dict(targets=route_sets.targets())
+        elif args.action=='installed-replacements':
+            rows=route_sets.installed(args.installed_hash)
+            data=catalog() if rows else None
+            for row in rows:row['preview']=validate_recipe(row['recipe'],data)[1]
+            result=dict(replacements=rows)
+        else:result=route_sets.prepare(args.installed_hash,read_json(args.recipe) if args.recipe else None,args.target_id,args.remove_target)
+    elif args.action in ('library','save-library','delete-library'):
         import route_library
         if args.action=='library':result=route_library.index()
         else:
@@ -292,7 +323,7 @@ def main():
         require(args.recipe is not None,'Recipe required')
         recipe=read_json(args.recipe)
         if args.action=='preview':_,result=validate_recipe(recipe)
-        else:result=build(recipe,'online' if args.action=='build-online' else 'offline',args.offline_build)
+        else:result=build(recipe,'online-arms-race' if args.action=='build-arms-race' else 'online' if args.action=='build-online' else 'offline',args.offline_build,args.target_id)
     if args.output:
         destination=args.output.resolve()
         require(destination.is_relative_to((ROOT/'working').resolve()),'Response output must be under working/')

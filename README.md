@@ -18,31 +18,37 @@ Seacrest County already has a varied road network. This project explores new rac
 
 It changes race routes within existing events. Creating new terrain, road geometry, or separate event-menu entries is outside the current scope.
 
-## Local prototype
+## Windows beta features
 
-The prototype currently supports:
+This beta supports:
 
-- A map-based road and marker picker.
-- Courses with a start, up to twelve intermediate markers, and a finish.
-- A saved-race library with course names, route previews, estimated lengths, and separate offline/online export information. (export tool works a bit weird, will change later on)
-- Versioned recipe saving and importing, with earlier course revisions retained.
-- Offline and online test-package generation, with online export tied to a completed offline test.
-- Integrated installation, direct route switching, and shared restoration, with archive checks and save backups.
-- For now, the custom races only replace the Roadster Reborn event. That's been the safest and most crash proof method tested so far, might change in the future if found a better way.
+- A map-based road and marker picker, with up to eight total installed markers (start and finish included).
+- Race Library with named routes, previews, estimated lengths, recipe importing and retained revisions.
+- Multiple stock-event replacements at once: 10 Offline Race, 16 Online Race and 15 Online Arms Race targets.
+- A Replaced routes tab with each installed course preview and individual restoration.
+- Direct online installation without an offline-test prerequisite. Arms Race is online only.
+- Archive validation, save backups, and restoration of the complete stock archive.
+- The footer: Seacrest Route Maker by yeedoo.
 
 Custom routes have been completed offline and in two-PC private multiplayer tests without reported issues. These results apply to the tested routes and game setup; each new course still needs its own validation.
 
-## Windows beta v0.3.0-beta.2
+## Windows beta v0.5.0-beta.1
 
-Download **SeacrestRouteMaker-v0.3.0-beta.2-Windows.zip** from [GitHub Releases](https://github.com/yeedough/seacrest-route-maker/releases). Extract it into a new writable folder outside the game. With Windows, Python 3.10+ and the supported stock PC game installed, double-click **Setup.cmd**, or open a terminal in the extracted folder and run:
+Download **SeacrestRouteMaker-v0.5.0-beta.1-Windows.zip** from [GitHub Releases](https://github.com/yeedough/seacrest-route-maker/releases/tag/v0.5.0-beta.1). Extract into a new writable folder outside the game. Install Python 3.10+ and run **Setup.cmd**, or run:
 
 ```powershell
 py -3 setup_beta.py
 ```
 
-Paste the folder containing NFS11Remastered.exe. Setup reads your game files to generate the map locally. Then launch **route-maker/SeacrestRouteMaker.exe**. Save the course to the library, select **Offline**, and click **Install race**. After completing it, select **Online** to prepare and install the private multiplayer variant. **Delete** removes the library entry while retaining builds and backups. Importing its recipe brings it back. Green arrows estimate the grid facing direction from stored spawn vectors checked against grid order. Check the arrow against your first leg. Courses with more than four waypoints are experimental and still need gameplay testing. Under **Game installation**, inspect the game folder, install a selected build, switch between supported routes, or restore the original. Keep your beta folder and its local backups. The classic desktop .NET Framework compiler is needed to export portable packages. To build the editor from source after setup, run `py -3 scripts/build_route_maker_app.py`.
+Paste the supported stock game folder containing NFS11Remastered.exe. Setup generates the map from your own installation. Open **route-maker/SeacrestRouteMaker.exe**. Save a course, open **Race Library**, choose Offline/Online, Race/Arms Race and the stock target, then **Install route**. **Replaced routes** shows installed assignments and restores them individually. **Game installation** offers full restoration. Use matching complete replacement sets on both PCs for private multiplayer.
+
+Keep your previous app folder, recipes, build evidence and backups. Restore replacements through the previous app before setting up this beta against stock files. Import your saved recipe JSON files into the new library. Do not delete the folder holding an active installation's build manifests or backups.
+
+The editor EXE is included in both download paths. Windows .NET Framework is required; its compiler is also used for portable helper exports. To rebuild the editor, run `py -3 scripts/build_route_maker_app.py`. See [the app guide](route-maker/README.md) for details.
 
 ## Current limits
+
+**Eight total markers maximum for installation.** Longer saved recipes can be opened and edited, but builds above eight are refused because of a confirmed native event-preview buffer overflow. This is crash prevention, not expanded waypoint support. An eight-marker control passed preview; every new course still needs gameplay testing.
 
 The editor uses existing race markers rather than arbitrary checkpoint placement. Its map preview is an estimate: direction, restrictions, and junction traversal can make the in-game route differ. Estimated world-unit lengths are displayed separately from reported in-game distances.
 

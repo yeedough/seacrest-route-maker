@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -119,7 +119,7 @@ partial class MakerForm : Form {
     MapCanvas map=new MapCanvas(); TextBox routeName=new TextBox(); ComboBox role=new ComboBox(), roadRules=new ComboBox();
     ListBox choices=new ListBox(), itinerary=new ListBox(); Label roadLabel=new Label(), status=new Label(), previewLabel=new Label();
     Button preview, saveLibrary, libraryInstall, libraryDelete; ComboBox installMode=new ComboBox(); FlowLayoutPanel tools;
-    TabControl pages=new TabControl(); TabPage editorPage=new TabPage("Route editor"),libraryPage=new TabPage("Saved races");
+    TabControl pages=new TabControl(); TabPage editorPage=new TabPage("Route editor"),libraryPage=new TabPage("Race Library");
     ListBox libraryList=new ListBox(); MapCanvas libraryMap=new MapCanvas();
     Label libraryDetails=new Label(),libraryIssues=new Label(); ComboBox libraryVariants=new ComboBox();
     Button libraryEdit,libraryOpen; List<LibraryRace> savedRaces=new List<LibraryRace>();
@@ -138,14 +138,15 @@ partial class MakerForm : Form {
         session=Path.Combine(project,"working","route-maker-sessions",DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fffffff"));Directory.CreateDirectory(session);
         Text="Seacrest Route Maker — local prototype"; Size=new Size(1320,900); MinimumSize=new Size(1100,790); StartPosition=FormStartPosition.CenterScreen;
         Font=new Font("Segoe UI",9.5f); AutoScaleMode=AutoScaleMode.Dpi; BackColor=Color.FromArgb(238,243,245);
-        var outer=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=1,RowCount=4,Padding=new Padding(16)};
+        var outer=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=1,RowCount=5,Padding=new Padding(16)};
         outer.RowStyles.Add(new RowStyle(SizeType.Absolute,62));outer.RowStyles.Add(new RowStyle(SizeType.Absolute,45));
-        outer.RowStyles.Add(new RowStyle(SizeType.Percent,100));outer.RowStyles.Add(new RowStyle(SizeType.Absolute,42));Controls.Add(outer);
+        outer.RowStyles.Add(new RowStyle(SizeType.Percent,100));outer.RowStyles.Add(new RowStyle(SizeType.Absolute,42));
+        outer.RowStyles.Add(new RowStyle(SizeType.AutoSize));Controls.Add(outer);
         var title=new Label {Text="SEACREST  /  ROUTE MAKER",Dock=DockStyle.Top,Height=30,Font=new Font("Segoe UI",19,FontStyle.Bold),ForeColor=Color.FromArgb(20,45,60)};
         var head=new Panel {Dock=DockStyle.Fill};head.Controls.Add(new Label {Text="Create test courses on existing roads. Library, offline and online builds, and game installation.",Dock=DockStyle.Bottom,Height=24});head.Controls.Add(title);outer.Controls.Add(head,0,0);
         tools=new FlowLayoutPanel {Dock=DockStyle.Fill,WrapContents=false};
         tools.Controls.Add(Button("Tested 6 km preset",delegate{pages.SelectedTab=editorPage;Preset();}));tools.Controls.Add(Button("New route",delegate{pages.SelectedTab=editorPage;Clear();}));
-        tools.Controls.Add(Button("Import recipe",OpenRecipe));saveLibrary=Button("Save to library",SaveRecipe);tools.Controls.Add(saveLibrary);tools.Controls.Add(Button("Fit map",delegate{if(pages.SelectedTab==libraryPage)libraryMap.FitMap();else map.FitMap();}));
+        tools.Controls.Add(Button("Import recipe",OpenRecipe));saveLibrary=Button("Save to library",SaveRecipe);tools.Controls.Add(saveLibrary);tools.Controls.Add(Button("Fit map",delegate{if(pages.SelectedTab==libraryPage)libraryMap.FitMap();else if(pages.SelectedTab==replacementsPage)replacementMap.FitMap();else map.FitMap();}));
         tools.Controls.Add(Button("Open latest export",delegate{if(latestBuild!=null)Process.Start(new ProcessStartInfo(latestBuild){UseShellExecute=true});}));outer.Controls.Add(tools,0,1);
         var body=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=2,RowCount=1};body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));body.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,370));
         body.Controls.Add(map,0,0);
@@ -157,21 +158,24 @@ partial class MakerForm : Form {
         role.DropDownStyle=ComboBoxStyle.DropDownList;role.Items.AddRange(new object[]{"start","waypoint","finish"});role.SelectedIndex=0;role.Dock=DockStyle.Fill;side.Controls.Add(role,0,3);
         roadLabel.Dock=DockStyle.Fill;roadLabel.Text="Click a road to filter markers";side.Controls.Add(roadLabel,0,4);
         choices.Dock=DockStyle.Fill;side.Controls.Add(choices,0,5);side.Controls.Add(Button("Use selected marker",UseSelected),0,6);
-        side.Controls.Add(Label("2  COURSE ORDER  (maximum 14 markers)"),0,7);itinerary.Dock=DockStyle.Fill;side.Controls.Add(itinerary,0,8);
+        side.Controls.Add(Label("2  COURSE ORDER  (install limit: 8 markers)"),0,7);itinerary.Dock=DockStyle.Fill;side.Controls.Add(itinerary,0,8);
         var controls=new FlowLayoutPanel {Dock=DockStyle.Fill,WrapContents=false};controls.Controls.Add(Button("Remove",Remove));controls.Controls.Add(Button("Via up",delegate{MoveVia(-1);}));controls.Controls.Add(Button("Via down",delegate{MoveVia(1);}));side.Controls.Add(controls,0,9);
         side.Controls.Add(Label("Stock restriction set"),0,10);roadRules.DropDownStyle=ComboBoxStyle.DropDownList;roadRules.Dock=DockStyle.Fill;side.Controls.Add(roadRules,0,11);
-        previewLabel.Dock=DockStyle.Fill;previewLabel.Text="Dashed amber path = undirected estimate. Direction and race restrictions are not simulated.";side.Controls.Add(previewLabel,0,12);
+        previewLabel.Dock=DockStyle.Fill;previewLabel.Text="Dashed amber path = undirected estimate. Direction and route restrictions are not simulated.";side.Controls.Add(previewLabel,0,12);
         var exportRow=new FlowLayoutPanel {Dock=DockStyle.Fill,WrapContents=false};preview=Button("Preview",async delegate{await Preview();});exportRow.Controls.Add(preview);side.Controls.Add(exportRow,0,13);
-        var caveat=Label("V0.1 uses existing start grids, waypoints and finish markers. No free placement. Test every new recipe offline first.");caveat.Dock=DockStyle.Fill;side.Controls.Add(caveat,0,14);
+        var caveat=Label("V0.1 uses existing start grids, waypoints and finish markers. No free placement. New courses need gameplay testing.");caveat.Dock=DockStyle.Fill;side.Controls.Add(caveat,0,14);
 
         var scroll=new Panel {Dock=DockStyle.Fill,AutoScroll=true};side.AutoSize=true;side.Dock=DockStyle.Top;scroll.Controls.Add(side);body.Controls.Add(scroll,1,0);
-        pages.Dock=DockStyle.Fill;editorPage.Controls.Add(body);pages.TabPages.Add(editorPage);pages.TabPages.Add(libraryPage);BuildLibraryPage();BuildGamePage();outer.Controls.Add(pages,0,2);
+        pages.Dock=DockStyle.Fill;editorPage.Controls.Add(body);pages.TabPages.Add(editorPage);pages.TabPages.Add(libraryPage);BuildLibraryPage();BuildReplacementsPage();BuildGamePage();outer.Controls.Add(pages,0,2);
         status.Dock=DockStyle.Fill;status.ForeColor=Color.FromArgb(20,75,92);status.Text="Loading local map…";outer.Controls.Add(status,0,3);
+        var watermark=new Label {Name="AuthorWatermark",Text="Seacrest Route Maker by yeedoo",AutoSize=true,Dock=DockStyle.Fill,
+            TextAlign=ContentAlignment.MiddleCenter,ForeColor=Color.FromArgb(85,105,115),Margin=new Padding(0,4,0,0)};
+        outer.Controls.Add(watermark,0,4);
         role.SelectedIndexChanged+=delegate {map.Role=role.Text;RefreshChoices();map.Invalidate();};
         choices.DoubleClick+=delegate{UseSelected();};roadRules.SelectedIndexChanged+=delegate{if(!updating)Changed();};
         map.Pick=delegate(int road,Marker m){map.SelectedRoad=road;roadLabel.Text="Road "+road+"  /  "+role.Text+" markers";RefreshChoices();if(m!=null){choices.SelectedItem=m;SelectMarker(m);}map.Invalidate();};
-        LoadData();libraryMap.Sections=map.Sections;libraryMap.Markers=new List<Marker>();
-        pages.SelectedIndexChanged+=delegate{saveLibrary.Enabled=!busy&&pages.SelectedTab==editorPage;if(pages.SelectedTab==gamePage){if(!busy)InspectOnTab();}else if(pages.SelectedTab==libraryPage)libraryMap.FitMap();else map.FitMap();};
+        LoadData();replacementMap.Sections=map.Sections;replacementMap.Markers=new List<Marker>();libraryMap.Sections=map.Sections;libraryMap.Markers=new List<Marker>();
+        pages.SelectedIndexChanged+=async delegate{saveLibrary.Enabled=!busy&&pages.SelectedTab==editorPage;if(pages.SelectedTab==replacementsPage){await RefreshReplacements();}else if(pages.SelectedTab==gamePage){if(!busy)InspectOnTab();}else if(pages.SelectedTab==libraryPage)libraryMap.FitMap();else if(pages.SelectedTab==replacementsPage)replacementMap.FitMap();else map.FitMap();};
         Shown+=async delegate{map.FitMap();await Preview();await RefreshLibrary();};
     }
     async void InspectOnTab(){await InspectInstallation();}
@@ -180,7 +184,7 @@ partial class MakerForm : Form {
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,350));layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
         var left=new TableLayoutPanel{Dock=DockStyle.Fill,ColumnCount=1,RowCount=4,Padding=new Padding(0,0,12,0)};
         left.RowStyles.Add(new RowStyle(SizeType.Absolute,30));left.RowStyles.Add(new RowStyle(SizeType.Percent,100));left.RowStyles.Add(new RowStyle(SizeType.Absolute,42));left.RowStyles.Add(new RowStyle(SizeType.Absolute,105));
-        left.Controls.Add(Label("SAVED COURSES  /  choose one to preview"),0,0);
+        left.Controls.Add(Label("SAVED ROUTES  /  choose one to preview"),0,0);
         libraryList.Dock=DockStyle.Fill;libraryList.DrawMode=DrawMode.OwnerDrawFixed;libraryList.ItemHeight=66;libraryList.IntegralHeight=false;
         libraryList.DrawItem+=delegate(object s,DrawItemEventArgs e){if(e.Index<0)return;e.DrawBackground();var item=(LibraryRace)libraryList.Items[e.Index];var d=item.Data;Color c=(e.State&DrawItemState.Selected)!=0?SystemColors.HighlightText:Color.FromArgb(25,50,65);
             using(var b=new SolidBrush(c)) {var box=new RectangleF(e.Bounds.X+8,e.Bounds.Y+5,e.Bounds.Width-16,22);gText(e.Graphics,Json.Str(d["name"]),b,box);
@@ -189,12 +193,15 @@ partial class MakerForm : Form {
         libraryList.SelectedIndexChanged+=delegate{ShowLibraryRace();};left.Controls.Add(libraryList,0,1);
         var buttons=new FlowLayoutPanel{Dock=DockStyle.Fill,WrapContents=false};buttons.Controls.Add(Button("Refresh",async delegate{await RefreshLibrary();}));buttons.Controls.Add(Button("Import recipe",OpenRecipe));left.Controls.Add(buttons,0,2);
         libraryIssues.Dock=DockStyle.Fill;libraryIssues.AutoEllipsis=true;left.Controls.Add(libraryIssues,0,3);
-        var right=new TableLayoutPanel{Dock=DockStyle.Fill,ColumnCount=1,RowCount=4};right.RowStyles.Add(new RowStyle(SizeType.Percent,100));right.RowStyles.Add(new RowStyle(SizeType.Absolute,104));right.RowStyles.Add(new RowStyle(SizeType.Absolute,34));right.RowStyles.Add(new RowStyle(SizeType.Absolute,40));
+        var right=new TableLayoutPanel{Dock=DockStyle.Fill,ColumnCount=1,RowCount=5};right.RowStyles.Add(new RowStyle(SizeType.Percent,100));right.RowStyles.Add(new RowStyle(SizeType.Absolute,124));right.RowStyles.Add(new RowStyle(SizeType.Absolute,34));right.RowStyles.Add(new RowStyle(SizeType.Absolute,40));
+        right.RowStyles.Add(new RowStyle(SizeType.Absolute,36));
         right.Controls.Add(libraryMap,0,0);libraryDetails.Dock=DockStyle.Fill;libraryDetails.Padding=new Padding(0,7,0,0);right.Controls.Add(libraryDetails,0,1);
         libraryVariants.Dock=DockStyle.Fill;libraryVariants.DropDownStyle=ComboBoxStyle.DropDownList;libraryVariants.DropDownWidth=850;right.Controls.Add(libraryVariants,0,2);
-        var actions=new FlowLayoutPanel{Dock=DockStyle.Fill,WrapContents=false};libraryEdit=Button("Edit a copy",EditLibraryRace);libraryOpen=Button("Open selected build",OpenLibraryBuild);installMode.DropDownStyle=ComboBoxStyle.DropDownList;installMode.Width=85;installMode.Items.AddRange(new object[]{"Offline","Online"});installMode.SelectedIndex=0;
-        libraryInstall=Button("Install race",async delegate{await LibraryInstall();});libraryDelete=Button("Delete",async delegate{await DeleteLibraryRace();});
-        actions.Controls.Add(libraryEdit);actions.Controls.Add(installMode);actions.Controls.Add(libraryInstall);actions.Controls.Add(libraryDelete);actions.Controls.Add(libraryOpen);right.Controls.Add(actions,0,3);
+        var actions=new FlowLayoutPanel{Dock=DockStyle.Fill,WrapContents=false};libraryEdit=Button("Edit a copy",EditLibraryRace);libraryOpen=Button("Open selected build",OpenLibraryBuild);installMode.DropDownStyle=ComboBoxStyle.DropDownList;installMode.Width=85;installMode.Items.AddRange(new object[]{"Offline","Online"});installMode.SelectedIndex=0;installMode.SelectedIndexChanged+=delegate{SyncEventKind();};
+        eventKind.DropDownStyle=ComboBoxStyle.DropDownList;eventKind.Width=105;eventKind.Items.AddRange(new object[]{"Race","Arms Race"});eventKind.SelectedIndex=0;eventKind.Enabled=false;eventKind.SelectedIndexChanged+=delegate{SyncEventKind();};
+        libraryInstall=Button("Install route",async delegate{await LibraryInstall();});libraryDelete=Button("Delete",async delegate{await DeleteLibraryRace();});
+        actions.Controls.Add(libraryEdit);actions.Controls.Add(installMode);actions.Controls.Add(eventKind);actions.Controls.Add(libraryInstall);actions.Controls.Add(libraryDelete);actions.Controls.Add(libraryOpen);right.Controls.Add(actions,0,3);
+        stockTargets.Dock=DockStyle.Fill;stockTargets.DropDownStyle=ComboBoxStyle.DropDownList;right.Controls.Add(stockTargets,0,4);
         layout.Controls.Add(left,0,0);layout.Controls.Add(right,1,0);libraryPage.Controls.Add(layout);ShowLibraryRace();
     }
     void gText(Graphics g,string text,Brush brush,RectangleF box) {using(var fmt=new StringFormat{Trimming=StringTrimming.EllipsisCharacter,FormatFlags=StringFormatFlags.NoWrap})g.DrawString(text,Font,brush,box,fmt);}
@@ -206,11 +213,12 @@ partial class MakerForm : Form {
         libraryList.SelectedItem=savedRaces.FirstOrDefault(x=>Json.Str(x.Data["id"])==key)??savedRaces.FirstOrDefault();
         var errors=Json.Arr(result["issues"]).Select(x=>Json.Obj(x)).ToList();
         libraryIssues.Text=errors.Count==0?"Estimates use world units. Reported game distances appear separately.\nBrowsing keeps your editor draft intact.":errors.Count+" unavailable item(s).\n"+String.Join("\n",errors.Take(2).Select(x=>Path.GetFileName(Json.Str(x["path"]))+": "+Json.Str(x["message"])));
-        libraryPage.Text="Saved races ("+savedRaces.Count+")";ShowLibraryRace();PopulateInstallChoices();
+        if(targets.Count==0){var targetData=await Run("targets","");foreach(var v in Json.Arr(targetData["targets"])) {var t=Json.Obj(v);targets.Add(new StockTarget{Id=Convert.ToInt32(t["event_id"]),Name=(string)t["title"],Mode=(string)t["mode"]});}FillTargets();}
+        libraryPage.Text="Race Library ("+savedRaces.Count+")";ShowLibraryRace();PopulateInstallChoices();
     }
     async Task RefreshLibrary() {
         if(busy)return;
-        try{Busy(true);status.Text="Reading saved courses and checking export files…";await ReloadLibrary();status.Text="Saved-race library refreshed. Choose a course to preview it.";}
+        try{Busy(true);status.Text="Reading saved courses and checking export files…";await ReloadLibrary();status.Text="Race Library refreshed. Choose a course to preview it.";}
         catch(Exception ex){status.Text="Cannot refresh library: "+ex.Message;}
         finally{Busy(false);}
     }
@@ -309,44 +317,23 @@ partial class MakerForm : Form {
         }catch(Exception ex){status.Text=ex.Message;MessageBox.Show(this,ex.Message,"Preview",MessageBoxButtons.OK,MessageBoxIcon.Information);}finally{Busy(false);}
     }
     async Task LibraryInstall() {
-        var item=libraryList.SelectedItem as LibraryRace;if(item==null||busy)return;
-        bool online=installMode.SelectedIndex==1; string mode=online?"online":"offline";
-        string file=Path.Combine(session,"library-"+(++serial)+".json");Json.Write(file,item.Data["recipe"]);
+        var item=libraryList.SelectedItem as LibraryRace;var target=stockTargets.SelectedItem as StockTarget;
+        if(item==null||target==null||busy)return;
         try {
-            Busy(true);status.Text="Preparing "+mode+" race…";
-            var existing=Json.Arr(item.Data["variants"]).Select(Json.Obj).FirstOrDefault(v=>Convert.ToBoolean(v["valid"])&&(string)v["mode"]==mode);
-            string build;
-            if(existing!=null)build=(string)existing["path"];
-            else {
-                string extra="--recipe "+Quote(file);
-                if(online){string off=item.Data["offline_build"] as string;
-                    if(off==null)throw new InvalidOperationException("Install and complete this course offline first.");
-                    if(!File.Exists(Path.Combine(off,"offline-success.json"))){string obs=AskObservation();if(obs==null)return;
-                        string note=Path.Combine(session,"test-"+(++serial)+".txt");File.WriteAllText(note,obs);await Run("record-offline","--offline-build "+Quote(off)+" --observation-file "+Quote(note));}
-                    extra+=" --offline-build "+Quote(off);
-                }
-                build=(string)(await Run(online?"build-online":"build-offline",extra))["build_dir"];
-            }
-            latestBuild=build;await ReloadLibrary((string)item.Data["id"]);OpenGamePage(build);
-            Busy(false);await InspectInstallation();
-            if(installRoute.Enabled && MessageBox.Show(this,"Install "+item.Data["name"]+" ("+mode+") into " +gamePath.Text+"?\nCurrent save folder: "+savePath.Text,"Install race",MessageBoxButtons.OKCancel)==DialogResult.OK)await ChangeInstallation(true);
-        }catch(Exception ex){status.Text=ex.Message;MessageBox.Show(this,ex.Message,"Install race");}finally{Busy(false);}
+            if(installMode.SelectedIndex==0 && (eventKind.SelectedIndex!=0 || target.Mode!="offline"))throw new InvalidOperationException("Arms Race is available online only.");
+            await InspectInstallation();
+            if(installed==null || !installed.Known || installed.GameRunning)throw new InvalidOperationException("Close the game and inspect a supported installation first.");
+            Busy(true);status.Text="Preparing replacements, keeping the other installed routes…";
+            string file=Path.Combine(session,"library-"+(++serial)+".json");Json.Write(file,item.Data["recipe"]);
+            var result=await Run("prepare-replacements","--installed-hash "+installed.Hash+" --target-id "+target.Id+" --recipe "+Quote(file));
+            SetPreparedChoice(result);Busy(false);
+            if(ConfirmRouteChange("Install "+item.Data["name"]+" => "+target+"?\nOther replaced routes will be kept.\nGame: "+gamePath.Text+"\nSave folder: "+savePath.Text,"Install route"))await ChangeInstallation(true);
+        }catch(Exception ex){status.Text=ex.Message;MessageBox.Show(this,ex.Message,"Install route");}finally{Busy(false);}
     }
     async Task DeleteLibraryRace(){var item=libraryList.SelectedItem as LibraryRace;if(item==null||busy)return;
-        if(MessageBox.Show(this,"Remove "+item.Data["name"]+" from Saved races? Its builds and backups will be kept.","Delete race",MessageBoxButtons.YesNo)!=DialogResult.Yes)return;
-        try{Busy(true);string f=Path.Combine(session,"remove-"+(++serial)+".json");Json.Write(f,item.Data["recipe"]);await Run("delete-library","--recipe "+Quote(f));await ReloadLibrary();status.Text="Race removed from the library.";}
+        if(MessageBox.Show(this,"Remove "+item.Data["name"]+" from Race Library? Its builds and backups will be kept.","Delete route",MessageBoxButtons.YesNo)!=DialogResult.Yes)return;
+        try{Busy(true);string f=Path.Combine(session,"remove-"+(++serial)+".json");Json.Write(f,item.Data["recipe"]);await Run("delete-library","--recipe "+Quote(f));await ReloadLibrary();status.Text="Route removed from the library.";}
         catch(Exception ex){MessageBox.Show(this,ex.Message);}finally{Busy(false);}}
-    string AskObservation() {
-        using(var dialog=new Form {Text="Record your offline test",Size=new Size(570,320),StartPosition=FormStartPosition.CenterParent,Font=Font}) {
-            var label=new Label {Text="Only continue after you completed this exported route offline.\nDescribe the start, guidance, finish/results and any abnormalities.",Dock=DockStyle.Top,Height=60};
-            var input=new TextBox {Multiline=true,Dock=DockStyle.Fill,ScrollBars=ScrollBars.Vertical};
-            var buttons=new FlowLayoutPanel {Dock=DockStyle.Bottom,Height=45,FlowDirection=FlowDirection.RightToLeft};
-            var ok=new Button {Text="Record success",AutoSize=true};var cancel=new Button {Text="Cancel",DialogResult=DialogResult.Cancel};
-            ok.Click+=delegate{if(input.Text.Trim().Length>=10)dialog.DialogResult=DialogResult.OK;else MessageBox.Show(dialog,"Enter your actual completed-test observations.");};
-            buttons.Controls.Add(ok);buttons.Controls.Add(cancel);dialog.Controls.Add(input);dialog.Controls.Add(label);dialog.Controls.Add(buttons);
-            return dialog.ShowDialog(this)==DialogResult.OK?input.Text:null;
-        }
-    }
     async void SaveRecipe() {
         if(busy)return;
         try {string file=WriteRecipe();Busy(true);var saved=await Run("save-library","--recipe "+Quote(file));await ReloadLibrary(Json.Str(saved["recipe_hash"]));

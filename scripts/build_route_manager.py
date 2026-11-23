@@ -9,7 +9,7 @@ def build_manager(package,manifest):
     package=Path(package)
     source=(ROOT/'scripts/route-maker/RouteTestManager.cs').read_text(encoding='utf-8')
     candidate=manifest['candidate_sha256'];mode=manifest['mode']
-    require(len(candidate)==64 and all(c in '0123456789abcdef' for c in candidate) and mode in ('offline','online'),'Invalid manager profile')
+    require(len(candidate)==64 and all(c in '0123456789abcdef' for c in candidate) and mode in ('offline','online','online-arms-race'),'Invalid manager profile')
     patch=read_json(package/'patch.json');require(patch['candidate_sha256']==candidate,'Patch mismatch')
     source=source.replace('__CANDIDATE_HASH__',candidate).replace('__ROUTE_MODE__',mode)
     folder=package.parent/'manager-build';folder.mkdir(exist_ok=True)

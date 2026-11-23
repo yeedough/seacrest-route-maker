@@ -26,7 +26,7 @@ def main():
     shutil_source=ROOT/'scripts/route-maker/README.md'
     if shutil_source.exists():(out/'README.md').write_bytes(shutil_source.read_bytes())
     write_json(out/'build.json',dict(python=sys.executable,compiler=str(compiler),map_evidence=data['evidence'],
-                                    marker_count=len(data['markers']),local_only=True,version="0.3",explicit_install_and_restore=True,build_writes_to_game=False))
+                                    marker_count=len(data['markers']),local_only=True,version="0.5-local-preview",explicit_install_and_restore=True,build_writes_to_game=False))
     print(json.dumps(dict(executable=str(out/'SeacrestRouteMaker.exe'),roads=len(data['roads']),
                           sections=len(data['sections']),markers=len(data['markers'])),indent=2))
 
