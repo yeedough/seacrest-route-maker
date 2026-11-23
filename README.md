@@ -30,8 +30,6 @@ This beta supports:
 - Direct online installation without an offline-test prerequisite. Arms Race is online only.
 - Archive validation, save backups, and restoration of the complete stock archive.
 
-Custom routes have been completed offline and in two-PC private multiplayer tests without reported issues. These results apply to the tested routes and game setup; each new course still needs its own validation.
-
 ## Windows beta v0.5.0-beta.1
 
 Download **SeacrestRouteMaker-v0.5.0-beta.1-Windows.zip** from [GitHub Releases](https://github.com/yeedough/seacrest-route-maker/releases/tag/v0.5.0-beta.1). Extract into a new writable folder outside the game. Install Python 3.10+ and run **Setup.cmd**, or run:
