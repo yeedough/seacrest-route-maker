@@ -9,7 +9,8 @@ A project to create and organize custom race routes on the existing Seacrest Cou
 The beta is a Windows app where players can design a course on a map, keep a library of saved races, install a selected route, and restore the original game archive.
 
 In app Screenshot:
-<img width="1304" height="892" alt="image" src="https://github.com/user-attachments/assets/441a847b-2c35-4b88-b64f-228bc5e37e3b" />
+<img width="1919" height="1040" alt="image" src="https://github.com/user-attachments/assets/9db87ca0-cc99-4c90-a03f-dcee5e8f6e29" />
+
 
 
 ## The idea
@@ -28,7 +29,6 @@ This beta supports:
 - A Replaced routes tab with each installed course preview and individual restoration.
 - Direct online installation without an offline-test prerequisite. Arms Race is online only.
 - Archive validation, save backups, and restoration of the complete stock archive.
-- The footer: Seacrest Route Maker by yeedoo.
 
 Custom routes have been completed offline and in two-PC private multiplayer tests without reported issues. These results apply to the tested routes and game setup; each new course still needs its own validation.
 
