@@ -248,7 +248,15 @@ partial class MakerForm : Form {
         status.Text="Editing a copy. Save to library creates a revision; previous editor draft retained in the session folder.";
     }
     void EditLibraryRace(){var item=libraryList.SelectedItem as LibraryRace;if(item==null)return;try{ApplyLibraryRace(item);}catch(Exception ex){status.Text="Cannot edit course: "+ex.Message;}}
-    void OpenLibraryBuild(){var v=libraryVariants.SelectedItem as LibraryVariant;if(v==null)return;string path=Json.Str(v.Data["path"]);if(Directory.Exists(path))Process.Start(new ProcessStartInfo(path){UseShellExecute=true});else status.Text="Build folder is missing. Refresh the library.";}
+    protected virtual void OpenBuildFolder(string path){Process.Start(new ProcessStartInfo(path){UseShellExecute=true});}
+    void OpenLibraryBuild(){
+        var v=libraryVariants.SelectedItem as LibraryVariant;
+        if(v==null){status.Text="No build selected. Install this route to prepare a build first.";return;}
+        string path=Json.Str(v.Data["path"]);
+        try{if(!Directory.Exists(path))throw new DirectoryNotFoundException("Build folder is missing. Refresh the library.");OpenBuildFolder(path);}
+        catch(Exception ex){status.Text="Cannot open build: "+ex.Message;MessageBox.Show(this,status.Text,"Open selected build");}
+    }
+
     Label Label(string text) {return new Label {Text=text,Dock=DockStyle.Fill,AutoEllipsis=false};}
     Button Button(string text,Action action) {var b=new Button {Text=text,AutoSize=true,Height=30,FlatStyle=FlatStyle.System,Margin=new Padding(0,0,7,0)};b.Click+=delegate{if(!busy)action();};return b;}
     void LoadData() {
@@ -326,7 +334,7 @@ partial class MakerForm : Form {
             Busy(true);status.Text="Preparing replacements, keeping the other installed routes…";
             string file=Path.Combine(session,"library-"+(++serial)+".json");Json.Write(file,item.Data["recipe"]);
             var result=await Run("prepare-replacements","--installed-hash "+installed.Hash+" --target-id "+target.Id+" --recipe "+Quote(file));
-            SetPreparedChoice(result);Busy(false);
+            SetPreparedChoice(result);await ReloadLibrary(Json.Str(item.Data["id"]));Busy(false);
             if(ConfirmRouteChange("Install "+item.Data["name"]+" => "+target+"?\nOther replaced routes will be kept.\nGame: "+gamePath.Text+"\nSave folder: "+savePath.Text,"Install route"))await ChangeInstallation(true);
         }catch(Exception ex){status.Text=ex.Message;MessageBox.Show(this,ex.Message,"Install route");}finally{Busy(false);}
     }

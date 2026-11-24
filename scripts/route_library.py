@@ -91,12 +91,25 @@ def index(root=ROOT):
     for folder in sorted((root / 'working/route-maker-builds').glob('*')):
         if not folder.is_dir():
             continue
-        # Installation snapshots combine many recipes; they are not standalone library variants.
+        # Expose snapshot folders for browsing without treating them as standalone exports.
         try:
-            if read_json(folder / 'manifest.json').get('version') == 2:
+            snapshot = read_json(folder / 'manifest.json')
+            if snapshot.get('version') == 2:
+                from route_sets import normalize
+                rows = normalize(snapshot['replacements'])
+                candidate = folder / 'candidate/GAMELOGIC/CHALLENGEINSTANCES.BNDL'
+                if sha(candidate) != snapshot['candidate_sha256']:
+                    raise ValueError('Snapshot candidate hash differs from its manifest')
+                for row in rows:
+                    entry = add(row['recipe'], folder / 'manifest.json')
+                    entry['variants'].append(dict(path=str(folder.resolve()), mode=row['mode'],
+                        status='Installation snapshot: ' + row['stock_title'] + ' (complete replacement set)',
+                        valid=True, tested=False, source='Installation snapshot', problem='',
+                        candidate_sha256=snapshot['candidate_sha256']))
                 continue
-        except (OSError, ValueError):
-            pass
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            issue(folder, exc)
+            continue
         try:
             entry = add(read_json(folder / 'recipe.json'), folder / 'recipe.json')
         except (ValueError, KeyError, TypeError, OSError) as exc:
